@@ -125,7 +125,10 @@ class ShortenerBypass:
 
             domain = urlparse(url).netloc.lower()
 
-            if "exeygo" in domain:
+            # Special handling for archive.toonworld4all.me redirects
+            if "archive.toonworld4all.me" in domain and "/redirect/" in url:
+                final_url = await ShortenerBypass._bypass_archive_redirect(page)
+            elif "exeygo" in domain:
                 final_url = await ShortenerBypass._bypass_exeygo(page)
             elif "linkvertise" in domain:
                 final_url = await ShortenerBypass._bypass_linkvertise(page)
@@ -134,10 +137,29 @@ class ShortenerBypass:
 
             is_filehost = ShortenerBypass._is_file_host(final_url)
             return final_url, is_filehost
-        except:
+        except Exception as e:
+            # Fallback: return original URL
             return url, False
         finally:
             await page.close()
+
+    @staticmethod
+    async def _bypass_archive_redirect(page: Page) -> str:
+        """
+        Specifically handles redirect links from archive.toonworld4all.me/redirect/...
+        Waits for the 'Get Link' button, clicks it, and captures the navigation to the final file host.
+        """
+        try:
+            # Wait for the 'Get Link' button to appear
+            await page.wait_for_selector("text='Get Link'", timeout=15000)
+            # Click and wait for navigation to complete
+            async with page.expect_navigation(wait_until="networkidle", timeout=30000):
+                await page.click("text='Get Link'")
+            final_url = page.url
+            return final_url
+        except Exception as e:
+            # If the expected button is not found, try generic fallback
+            return await ShortenerBypass._bypass_generic(page)
 
     @staticmethod
     async def _bypass_exeygo(page: Page) -> str:
