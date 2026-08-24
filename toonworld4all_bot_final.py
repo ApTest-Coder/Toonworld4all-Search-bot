@@ -328,25 +328,53 @@ class ToonWorld4AllScraper:
             soup = BeautifulSoup(response.text, "lxml")
 
             results = []
-            articles = soup.find_all("article", class_=re.compile(r"post|entry"))
+
+            # Try multiple selectors for article containers
+            articles = (
+                soup.find_all("article") or
+                soup.find_all("div", class_=re.compile(r"post|entry|item|result")) or
+                soup.find_all("li", class_=re.compile(r"post|entry"))
+            )
+
+            if not articles:
+                # Fallback: find any link that contains "season" or "s\d+" in the URL
+                for a in soup.find_all("a", href=True):
+                    href = a.get("href", "")
+                    title = a.get_text(strip=True)
+                    if href and title and len(title) > 3:
+                        if "season" in href.lower() or re.search(r's\d+', href, re.I):
+                            results.append({
+                                "title": title,
+                                "url": href,
+                                "type": "season"
+                            })
+                # Limit to first 10
+                return results[:10]
 
             for article in articles:
-                title_elem = article.find("h2", class_=re.compile(r"entry-title|title"))
+                # Find title element
+                title_elem = (
+                    article.find("h2", class_=re.compile(r"entry-title|title|post-title")) or
+                    article.find("h1") or
+                    article.find("a", class_=re.compile(r"title|entry-title"))
+                )
+                # Find link
                 link_elem = article.find("a", href=True)
+                if not link_elem and title_elem and title_elem.name == "a":
+                    link_elem = title_elem
 
                 if title_elem and link_elem:
                     title = title_elem.get_text(strip=True)
-                    url = link_elem["href"]
-
-                    if "season" in url.lower() or re.search(r's\d+', url, re.I):
+                    url = link_elem.get("href")
+                    if url and ("season" in url.lower() or re.search(r's\d+', url, re.I)):
                         results.append({
                             "title": title,
                             "url": url,
                             "type": "season"
                         })
 
-            return results
-        except:
+            return results[:10]
+        except Exception as e:
             return []
 
     async def get_episode_info(self, url: str, ep_num: int) -> Episode:
