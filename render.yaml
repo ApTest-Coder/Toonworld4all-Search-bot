@@ -11,3 +11,5 @@ services:
         value: "829342319"
       - key: PORT
         value: 8080
+      - key: PYTHON_VERSION
+        value: "3.11.11"
